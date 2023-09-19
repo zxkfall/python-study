@@ -1,55 +1,58 @@
-from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
 import time
-import requests
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from PIL import Image
+from io import BytesIO
 
-# 初始化WebDriver，这里使用Chrome
-driver = webdriver.Chrome(executable_path='path_to_chromedriver.exe')
+# 启动内置的Chrome浏览器并最大化窗口
+driver = webdriver.Chrome()
+driver.maximize_window()
 
-# 打开大众点评商品页面，这是你要爬取信息的页面
-url = 'https://www.dianping.com/shenzhen/ch10/g119r1572'
-driver.get(url)
+# 打开大众点评网站
+driver.get("https://www.dianping.com")
 
-# 处理验证码
-captcha_element = driver.find_element_by_css_selector('.captcha-image')
-if captcha_element:
-    # 获取滑块元素
-    slider_element = driver.find_element_by_css_selector('.slider')
+# 定位并点击登录按钮
+login_button = driver.find_element(By.LINK_TEXT, "你好，请登录/注册")
+login_button.click()
 
-    # 获取验证码图片位置和滑块位置
-    captcha_location = captcha_element.location
-    slider_location = slider_element.location
+# 尝试切换到二维码登录方式，如果找不到对应元素，则不切换
+try:
+    qrcode_login_button = driver.find_element(By.CLASS_NAME, "qrcode-tab")
+    qrcode_login_button.click()
+except:
+    pass
 
-    # 获取滑块宽度
-    slider_width = slider_element.size['width']
+# 等待二维码出现
+time.sleep(2)  # 这里可以根据页面加载速度适当调整等待时间
 
-    # 计算滑块需要滑动的距离
-    slide_distance = captcha_location['x'] + slider_width / 2 - slider_location['x']
+# 获取二维码图片
+qrcode_element = driver.find_element(By.CLASS_NAME, "qrcode-img")
+qrcode_url = qrcode_element.get_attribute("src")
 
-    # 模拟滑动拼图操作
-    actions = ActionChains(driver)
-    actions.click_and_hold(slider_element).perform()
-    actions.move_by_offset(slide_distance, 0).perform()
-    actions.release().perform()
+# 获取二维码图片位置
+location = qrcode_element.location
+size = qrcode_element.size
 
-    # 等待一段时间以观察结果
-    time.sleep(5)
+# 计算二维码区域的坐标
+left = location['x']
+top = location['y']
+right = left + size['width']
+bottom = top + size['height']
 
-# 处理验证码后，继续爬取大众点评商品信息的代码
-response = driver.page_source
-soup = BeautifulSoup(response, 'html.parser')
-product_items = soup.find_all('div', class_='content')
+# 下载并显示二维码图片
+screenshot_binary = driver.get_screenshot_as_png()
+screenshot_image = Image.open(BytesIO(screenshot_binary))
+qr_code_image = screenshot_image.crop((left, top, right, bottom))
+qr_code_image.show()
 
-for product_item in product_items:
-# 提取商品名称、价格、评分等信息
-# ...
-# 帮我提取商品名称
-    product_name = product_item.find('h4').text
-    print(product_name)
-# 帮我提前商品价格
-    product_price = product_item.find('span', class_='price').text
-    print(product_price)
 
-# 关闭浏览器
+# 用户扫描二维码并登录，手动完成后继续执行以下代码
+
+# 等待用户登录完成，可以设置一个超时时间
+# 你可以添加代码来轮询检查用户是否已登录，或者根据网站上的元素状态来确定登录状态
+
+# 登录完成后，继续执行获取商品信息的操作
+# 你可以根据页面结构定位商品信息的元素并进行抓取
+
+# 最后不要忘记关闭浏览器
 driver.quit()
