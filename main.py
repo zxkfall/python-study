@@ -11,7 +11,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 # 创建 Chrome 选项对象
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument("--headless")  # 无界面模式
-
+# 禁止输出 INFO 级别的日志
+chrome_options.add_argument('--log-level=3')
 # 设置用户代理字符串
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 chrome_options.add_argument(f"user-agent={user_agent}")
