@@ -7,7 +7,7 @@ from io import BytesIO
 # 启动内置的Chrome浏览器并最大化窗口
 driver = webdriver.Chrome()
 driver.maximize_window()
-
+zoom = 1.5 # 设置缩放比例
 # 打开大众点评网站
 driver.get("https://www.dianping.com")
 
@@ -34,10 +34,10 @@ location = qrcode_element.location
 size = qrcode_element.size
 
 # 计算二维码区域的坐标
-left = location['x']
-top = location['y']
-right = left + size['width']
-bottom = top + size['height']
+left = location['x'] * zoom
+top = location['y'] * zoom
+right = left + size['width'] * zoom
+bottom = top + size['height'] * zoom
 
 # 下载并显示二维码图片
 screenshot_binary = driver.get_screenshot_as_png()
