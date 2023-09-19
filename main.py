@@ -10,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 # 创建 Chrome 选项对象
 chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument("--headless")  # 无界面模式
 
 # 设置用户代理字符串
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
@@ -85,9 +86,6 @@ except FileNotFoundError:
     cookies = driver.get_cookies()
     with open("cookies.pkl", "wb") as cookie_file:
         pickle.dump(cookies, cookie_file)
-    # # 打开大众点评网站
-    # time.sleep(10)
-    # driver.get("https://www.dianping.com")
 
 # 用户登录后的操作，可以在这里添加
 # 登录状态检查
@@ -168,7 +166,8 @@ try:
             print("推荐菜:", recommend_dishes_str)
             print("地点:", locations_str)
             # 打印商品名称和拼接的团购信息
-            print("团购信息:\n", group_deals_text)
+            print("团购信息:")
+            print(group_deals_text.strip())
             print("\n")
         # 判断是否有下一页，如果没有则退出循环
         try:
