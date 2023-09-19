@@ -116,54 +116,77 @@ try:
     # 执行搜索操作
     search_button = driver.find_element(By.ID, "J-all-btn")
     search_button.click()
-    driver.switch_to.window(driver.window_handles[1])  # 假设新窗口是第二个窗口，你可能需要根据实际情况调整索引
+    # 切换到新打开的标签页
+    driver.switch_to.window(driver.window_handles[-1])
 
-    # 找到美食链接并点击
-    food_link = driver.find_element(By.XPATH, "//a[contains(text(), '美食')]")
-    # 使用 JavaScript 模拟点击
-    driver.execute_script("arguments[0].click();", food_link)
-    driver.switch_to.window(driver.window_handles[2])  # 假设新窗口是第二个窗口，你可能需要根据实际情况调整索引
+    # 找到美食链接元素
+    food_link = driver.find_element(By.XPATH, "//a//span[contains(text(), '美食')]").find_element(By.XPATH, "..")
 
-    # 找到商品列表的父元素
-    shop_list = driver.find_element(By.ID, "shop-all-list")
+    # 获取美食链接的URL
+    food_link_url = food_link.get_attribute("href")
 
-    # 获取包含商品信息的所有<li>元素
-    items = shop_list.find_elements(By.XPATH, "//li[@class='']")
+    # 使用JavaScript打开链接在当前标签页中
+    driver.execute_script("window.location.href = arguments[0];", food_link_url)
 
-    # 遍历每个<li>元素，提取商品信息并打印
-    for item in items:
-        # 获取商品名称
-        shop_name = item.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
+    # 切换到新打开的标签页
+    driver.switch_to.window(driver.window_handles[-1])
 
-        # 获取团购信息的所有子元素
-        group_deals_elements = item.find_elements(By.XPATH,
-                                                  ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
+    while True:
 
-        # 使用列表推导式获取每个团购信息的文本
-        group_deals = [deal.get_attribute("textContent").strip() for deal in group_deals_elements]
+        # 找到商品列表的父元素
+        shop_list = driver.find_element(By.ID, "shop-all-list")
 
-        # 使用换行符 '\n' 连接团购信息列表的文本
-        group_deals_text = '\n'.join(group_deals)
+        # 获取包含商品信息的所有<li>元素
+        items = shop_list.find_elements(By.XPATH, "//li[@class='']")
 
-        # 获取推荐菜信息
-        recommend_dishes_elements = item.find_elements(By.XPATH,
-                                                       ".//div[@class='recommend']//a[@class='recommend-click']")
-        recommend_dishes = [dish.text for dish in recommend_dishes_elements]
-        recommend_dishes_str = ", ".join(recommend_dishes)
+        # 遍历每个<li>元素，提取商品信息并打印
+        for item in items:
+            # 获取商品名称
+            shop_name = item.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
 
-        # 获取地点信息
-        tag_elements = item.find_elements(By.XPATH, ".//div[@class='tag-addr']//span[@class='tag']")
-        locations = [tag.text for tag in tag_elements]
-        locations_str = ", ".join(locations)
+            # 获取团购信息的所有子元素
+            group_deals_elements = item.find_elements(By.XPATH,
+                                                      ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
 
-        # 打印店铺名称、推荐菜和地点信息
-        print("店铺名称:", shop_name)
-        print("推荐菜:", recommend_dishes_str)
-        print("地点:", locations_str)
-        # 打印商品名称和拼接的团购信息
-        print("团购信息:\n", group_deals_text)
-        print("\n")
+            # 使用列表推导式获取每个团购信息的文本
+            group_deals = [deal.get_attribute("textContent").strip() for deal in group_deals_elements]
 
+            # 使用换行符 '\n' 连接团购信息列表的文本
+            group_deals_text = '\n'.join(group_deals)
+
+            # 获取推荐菜信息
+            recommend_dishes_elements = item.find_elements(By.XPATH,
+                                                           ".//div[@class='recommend']//a[@class='recommend-click']")
+            recommend_dishes = [dish.text for dish in recommend_dishes_elements]
+            recommend_dishes_str = ", ".join(recommend_dishes)
+
+            # 获取地点信息
+            tag_elements = item.find_elements(By.XPATH, ".//div[@class='tag-addr']//span[@class='tag']")
+            locations = [tag.text for tag in tag_elements]
+            locations_str = ", ".join(locations)
+
+            # 打印店铺名称、推荐菜和地点信息
+            print("店铺名称:", shop_name)
+            print("推荐菜:", recommend_dishes_str)
+            print("地点:", locations_str)
+            # 打印商品名称和拼接的团购信息
+            print("团购信息:\n", group_deals_text)
+            print("\n")
+        # 判断是否有下一页，如果没有则退出循环
+        try:
+            next_page = driver.find_element(By.CLASS_NAME, "next")
+            if "disabled" in next_page.get_attribute("class"):
+                break
+        except:
+            break
+
+        # 点击下一页链接
+        next_page.click()
+
+        # 等待页面加载完成
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "shop-all-list"))
+        )
 except:
     # 用户未登录或超时
     print("用户未登录或超时")
