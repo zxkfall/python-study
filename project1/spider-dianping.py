@@ -5,7 +5,7 @@ from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 
 # 创建 Chrome 选项对象
@@ -86,7 +86,7 @@ except FileNotFoundError:
 # 登录状态检查
 try:
     user_element = WebDriverWait(driver, 15).until(
-        EC.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
+        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
     )
     # 用户已登录，可以继续获取商品信息
     # 找到城市选择元素
@@ -177,7 +177,7 @@ try:
 
         # 等待页面加载完成
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "shop-all-list"))
+            ec.presence_of_element_located((By.ID, "shop-all-list"))
         )
 except:
     # 用户未登录或超时
