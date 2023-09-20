@@ -223,6 +223,8 @@ try:
             logger.error("未找到下一页链接", e)
             break
 
+        if len(shop_info_list) > 5:
+            break
         # 点击下一页链接
         next_page.click()
 
@@ -245,19 +247,20 @@ finally:
             file.write(f"{shop_info['团购信息']}\n")
             file.write("\n")  # 添加空行分隔不同店铺信息
 
+# 设置随机数生成器的种子，可以使用任何整数作为种子
+random.seed()  # 使用系统时间作为种子，以获得更随机的结果
 # 随机选取一条店铺信息
 random_shop_info = random.choice(shop_info_list)
 print("随机选取的店铺信息:")
 print(random_shop_info)
 
 # 提取随机选择的店铺名称并写入文件
-random_shop_name = random_shop_info['店铺名称']
 with open(random_shop_name_file_path, "w", encoding="utf-8") as name_file:
-    name_file.write(f"店铺名称: {shop_info['店铺名称']}\n")
-    name_file.write(f"推荐菜: {shop_info['推荐菜']}\n")
-    name_file.write(f"地点: {shop_info['地点']}\n")
+    name_file.write(f"店铺名称: {random_shop_info['店铺名称']}\n")
+    name_file.write(f"推荐菜: {random_shop_info['推荐菜']}\n")
+    name_file.write(f"地点: {random_shop_info['地点']}\n")
     name_file.write("团购信息:\n")
-    name_file.write(f"{shop_info['团购信息']}\n")
+    name_file.write(f"{random_shop_info['团购信息']}\n")
 
 # 最后不要忘记关闭浏览器
 driver.quit()
