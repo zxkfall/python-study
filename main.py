@@ -1,5 +1,5 @@
-import pickle
 import time
+import json
 from io import BytesIO
 from PIL import Image
 from selenium import webdriver
@@ -26,8 +26,8 @@ zoom = 1.5  # 设置缩放比例
 driver.get("https://www.dianping.com")
 # 检查是否存在保存的 Cookie 信息
 try:
-    with open("cookies.pkl", "rb") as cookie_file:
-        cookies = pickle.load(cookie_file)
+    with open("cookies.json", "rb") as cookie_file:
+        cookies = json.load(cookie_file)
 
     # 添加 Cookie 信息到 WebDriver
     for cookie in cookies:
@@ -85,8 +85,8 @@ except FileNotFoundError:
 
     # 登录成功后，获取并保存 Cookie 信息到文件
     cookies = driver.get_cookies()
-    with open("cookies.pkl", "wb") as cookie_file:
-        pickle.dump(cookies, cookie_file)
+    with open("cookies.json", "w") as cookie_file:
+        json.dump(cookies, cookie_file, indent=4)
 
 # 用户登录后的操作，可以在这里添加
 # 登录状态检查
