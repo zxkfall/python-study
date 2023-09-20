@@ -1,12 +1,55 @@
-import time
 import json
+import logging
+import os
+import random
 from io import BytesIO
 from PIL import Image
 from selenium import webdriver
+from selenium.common import TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
+
+# 获取当前文件所在的目录
+current_directory = os.path.dirname(os.path.abspath(__file__))
+
+# 构建保存cookies文件的相对路径
+cookie_file_path = os.path.join(current_directory, "cookies.json")
+
+# 构建保存文件的相对路径
+shop_info_file_path = os.path.join(current_directory, "shop_info.txt")
+
+# 构建保存随机选取的店铺名称的相对路径
+random_shop_name_file_path = os.path.join(current_directory, "random_shop_name.txt")
+
+# 店铺信息列表，包括店铺名称、推荐菜、地点和团购信息
+shop_info_list = []
+
+
+def init_logger():
+    # 获取当前 Python 脚本的文件名（包括扩展名 .py）
+    script_file = __file__
+    # 获取文件名和扩展名的元组
+    file_name, file_extension = os.path.splitext(script_file)
+    # 配置日志
+    log_file_path = os.path.join(current_directory, f"{file_name}.log")
+    # 创建一个自定义的文件处理器，并指定编码为UTF-8
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    file_handler.setFormatter(formatter)
+    # 创建日志记录器并将处理器添加到记录器中
+    logger_ = logging.getLogger(__name__)
+    logger_.addHandler(file_handler)
+    logger_.setLevel(logging.INFO)
+    return logger_
+
+
+# 初始化日志记录器
+logger = init_logger()
+
+# 设置缩放比例
+zoom = 1.5
 
 # 创建 Chrome 选项对象
 chrome_options = webdriver.ChromeOptions()
@@ -21,24 +64,25 @@ chrome_options.add_argument(f"user-agent={user_agent}")
 driver = webdriver.Chrome(options=chrome_options)
 # 启动内置的 Chrome 浏览器并最大化窗口
 driver.maximize_window()
-zoom = 1.5  # 设置缩放比例
+# 设置隐式等待时间
+driver.implicitly_wait(10)
 # 打开大众点评网站
 driver.get("https://www.dianping.com")
 # 检查是否存在保存的 Cookie 信息
 try:
-    with open("cookies.json", "rb") as cookie_file:
+    with open(cookie_file_path, "rb") as cookie_file:
         cookies = json.load(cookie_file)
-
     # 添加 Cookie 信息到 WebDriver
     for cookie in cookies:
         driver.add_cookie(cookie)
-
     # 刷新页面以应用 Cookie
     driver.refresh()
 
-except FileNotFoundError:
-    print("未找到保存的 Cookie 信息文件")
-
+except Exception as e:
+    if isinstance(e, FileNotFoundError):
+        logger.info("未找到保存的 Cookie 信息文件")
+    else:
+        logger.error("读取 Cookie 信息文件失败", e)
     # 如果找不到 Cookie 信息文件，使用二维码登录的代码部分可以放在这里
 
     # 定位并点击登录按钮
@@ -47,14 +91,12 @@ except FileNotFoundError:
 
     # 尝试切换到二维码登录方式，如果找不到对应元素，则不切换
     try:
-        qrcode_login_button = driver.find_element(By.CLASS_NAME, "qrcode-tab")
+        qrcode_login_button = WebDriverWait(driver, 5).until(
+            ec.visibility_of_element_located((By.CLASS_NAME, "qrcode-tab")))
         qrcode_login_button.click()
-    except:
+    except Exception as e:
+        logger.info("切换到二维码登录方式失败", e)
         pass
-
-    # 等待二维码出现
-    time.sleep(3)  # 这里可以根据页面加载速度适当调整等待时间
-
     # 获取二维码图片
     qrcode_element = driver.find_element(By.CLASS_NAME, "qrcode-img")
     qrcode_url = qrcode_element.get_attribute("src")
@@ -79,7 +121,7 @@ except FileNotFoundError:
 
     # 登录成功后，获取并保存 Cookie 信息到文件
     cookies = driver.get_cookies()
-    with open("cookies.json", "w") as cookie_file:
+    with open(cookie_file_path, "w") as cookie_file:
         json.dump(cookies, cookie_file, indent=4)
 
 # 用户登录后的操作，可以在这里添加
@@ -123,7 +165,6 @@ try:
     driver.switch_to.window(driver.window_handles[-1])
 
     while True:
-
         # 找到商品列表的父元素
         shop_list = driver.find_element(By.ID, "shop-all-list")
 
@@ -164,12 +205,22 @@ try:
             print("团购信息:")
             print(group_deals_text.strip())
             print("\n")
+
+            # 将店铺信息添加到列表中
+            shop_info_list.append({
+                "店铺名称": shop_name,
+                "推荐菜": recommend_dishes_str,
+                "地点": locations_str,
+                "团购信息": group_deals_text.strip()
+            })
+
         # 判断是否有下一页，如果没有则退出循环
         try:
             next_page = driver.find_element(By.CLASS_NAME, "next")
             if "disabled" in next_page.get_attribute("class"):
                 break
-        except:
+        except Exception as e:
+            logger.error("未找到下一页链接", e)
             break
 
         # 点击下一页链接
@@ -179,8 +230,34 @@ try:
         WebDriverWait(driver, 10).until(
             ec.presence_of_element_located((By.ID, "shop-all-list"))
         )
-except:
+except Exception as e:
     # 用户未登录或超时
-    print("用户未登录或超时")
+    logger.error("用户未登录或超时", e)
+finally:
+    # 打开文件以保存店铺信息
+    with open(shop_info_file_path, "w", encoding="utf-8") as file:
+        for shop_info in shop_info_list:
+            # 写入店铺信息到文件中
+            file.write(f"店铺名称: {shop_info['店铺名称']}\n")
+            file.write(f"推荐菜: {shop_info['推荐菜']}\n")
+            file.write(f"地点: {shop_info['地点']}\n")
+            file.write("团购信息:\n")
+            file.write(f"{shop_info['团购信息']}\n")
+            file.write("\n")  # 添加空行分隔不同店铺信息
+
+# 随机选取一条店铺信息
+random_shop_info = random.choice(shop_info_list)
+print("随机选取的店铺信息:")
+print(random_shop_info)
+
+# 提取随机选择的店铺名称并写入文件
+random_shop_name = random_shop_info['店铺名称']
+with open(random_shop_name_file_path, "w", encoding="utf-8") as name_file:
+    name_file.write(f"店铺名称: {shop_info['店铺名称']}\n")
+    name_file.write(f"推荐菜: {shop_info['推荐菜']}\n")
+    name_file.write(f"地点: {shop_info['地点']}\n")
+    name_file.write("团购信息:\n")
+    name_file.write(f"{shop_info['团购信息']}\n")
+
 # 最后不要忘记关闭浏览器
 driver.quit()
