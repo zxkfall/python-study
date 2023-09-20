@@ -5,7 +5,7 @@ import random
 from io import BytesIO
 from PIL import Image
 from selenium import webdriver
-from selenium.common import TimeoutException
+from selenium.common import TimeoutException, NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
@@ -174,16 +174,18 @@ try:
         # 遍历每个<li>元素，提取商品信息并打印
         for item in items:
             # 检查是否存在"暂停营业"的标签
-            # try:
-            #     paused_label = WebDriverWait(item, 0.1).until(
-            #         ec.presence_of_element_located((By.XPATH, ".//span[contains(text(), '暂停营业')]"))
-            #     )
-            #     # 如果元素找到了，可以在这里执行后续操作
-            #     print("找到了暂停营业标签:", paused_label.text)
-            #     continue
-            # except TimeoutException:
-            #     # 在找不到元素时捕获TimeoutException异常，然后继续执行后续操作
-            #     print("未找到暂停营业标签，继续往下运行")
+            driver.implicitly_wait(0)
+            try:
+                paused_label = item.find_element(By.XPATH, ".//span[contains(text(), '暂停营业')]")
+
+                # 如果元素找到了，可以在这里执行后续操作
+                print("找到了暂停营业标签:", paused_label.text)
+                continue
+            except NoSuchElementException:
+                # 在找不到元素时捕获TimeoutException异常，然后继续执行后续操作
+                print("未找到暂停营业标签，继续往下运行")
+            driver.implicitly_wait(10)
+
             # 商铺未暂停营业，继续提取信息
             # 获取商品名称
             shop_name = item.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
