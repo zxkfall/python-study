@@ -51,12 +51,6 @@ except FileNotFoundError:
         qrcode_login_button.click()
     except:
         pass
-    # 尝试切换到二维码登录方式，如果找不到对应元素，则不切换
-    try:
-        qrcode_login_button = driver.find_element(By.CLASS_NAME, "qrcode-tab")
-        qrcode_login_button.click()
-    except:
-        pass
 
     # 等待二维码出现
     time.sleep(3)  # 这里可以根据页面加载速度适当调整等待时间
