@@ -3,9 +3,10 @@ import logging
 import os
 import random
 from io import BytesIO
+
 from PIL import Image
 from selenium import webdriver
-from selenium.common import TimeoutException, NoSuchElementException
+from selenium.common import NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
@@ -13,18 +14,26 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 # 获取当前文件所在的目录
 current_directory = os.path.dirname(os.path.abspath(__file__))
-
 # 构建保存cookies文件的相对路径
 cookie_file_path = os.path.join(current_directory, "cookies.json")
-
 # 构建保存文件的相对路径
 shop_info_file_path = os.path.join(current_directory, "shop_info.txt")
-
 # 构建保存随机选取的店铺名称的相对路径
 random_shop_name_file_path = os.path.join(current_directory, "random_shop_name.txt")
-
 # 店铺信息列表，包括店铺名称、推荐菜、地点和团购信息
 shop_info_list = []
+max_page_count = 5
+
+
+def switch_city_page(_driver):
+    city_select = _driver.find_element(By.CLASS_NAME, "J-city")
+    city_select.click()
+    # 使用 ActionChains 将鼠标悬浮在城市选择元素上
+    action = ActionChains(_driver)
+    action.move_to_element(city_select).perform()
+    # 找到武汉地区的链接并点击
+    wuhan_link = _driver.find_element(By.XPATH, "//a[@href='//www.dianping.com/wuhan']")
+    wuhan_link.click()
 
 
 def init_logger():
@@ -48,18 +57,18 @@ def init_logger():
 # 初始化日志记录器
 logger = init_logger()
 
+logger.info("开始运行爬虫程序")
 # 设置缩放比例
 zoom = 1.5
-
 # 创建 Chrome 选项对象
 chrome_options = webdriver.ChromeOptions()
-chrome_options.add_argument("--headless")  # 无界面模式
+# chrome_options.add_argument("--headless")  # 无界面模式
 # 禁止输出 INFO 级别的日志
 chrome_options.add_argument('--log-level=3')
 # 设置用户代理字符串
 user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
-chrome_options.add_argument(f"user-agent={user_agent}")
 
+chrome_options.add_argument(f"user-agent={user_agent}")
 # 启动 Chrome WebDriver 并传入选项
 driver = webdriver.Chrome(options=chrome_options)
 # 启动内置的 Chrome 浏览器并最大化窗口
@@ -69,6 +78,8 @@ driver.implicitly_wait(10)
 # 打开大众点评网站
 driver.get("https://www.dianping.com")
 # 检查是否存在保存的 Cookie 信息
+
+
 try:
     with open(cookie_file_path, "rb") as cookie_file:
         cookies = json.load(cookie_file)
@@ -77,12 +88,15 @@ try:
         driver.add_cookie(cookie)
     # 刷新页面以应用 Cookie
     driver.refresh()
+    user_element = WebDriverWait(driver, 15).until(
+        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
+    )
 
 except Exception as e:
     if isinstance(e, FileNotFoundError):
         logger.info("未找到保存的 Cookie 信息文件")
     else:
-        logger.error("读取 Cookie 信息文件失败", e)
+        logger.error("读取 Cookie 信息文件失败", exc_info=True)
     # 如果找不到 Cookie 信息文件，使用二维码登录的代码部分可以放在这里
 
     # 定位并点击登录按钮
@@ -95,7 +109,7 @@ except Exception as e:
             ec.visibility_of_element_located((By.CLASS_NAME, "qrcode-tab")))
         qrcode_login_button.click()
     except Exception as e:
-        logger.info("切换到二维码登录方式失败", e)
+        logger.info("切换到二维码登录方式失败\n%s", str(e.args[0]))
         pass
     # 获取二维码图片
     qrcode_element = driver.find_element(By.CLASS_NAME, "qrcode-img")
@@ -124,6 +138,7 @@ except Exception as e:
     with open(cookie_file_path, "w") as cookie_file:
         json.dump(cookies, cookie_file, indent=4)
 
+
 # 用户登录后的操作，可以在这里添加
 # 登录状态检查
 try:
@@ -132,16 +147,21 @@ try:
     )
     # 用户已登录，可以继续获取商品信息
     # 找到城市选择元素
-    city_select = driver.find_element(By.CLASS_NAME, "J-city")
-    city_select.click()
-    # 使用 ActionChains 将鼠标悬浮在城市选择元素上
-    action = ActionChains(driver)
-    action.move_to_element(city_select).perform()
+    try:
+        switch_city_page(_driver=driver)
+    except Exception as e:
+        logger.info("有遮罩层 \n%s", str(e.args[0]))
+        # 使用部分匹配的 CSS 选择器来选择包含 "guangzhou" ,也就是当前定位城市的链接
+        local_city_link = driver.find_element(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
 
-    # 找到武汉地区的链接并点击
-    wuhan_link = driver.find_element(By.XPATH, "//a[@href='//www.dianping.com/wuhan']")
-    wuhan_link.click()
+        # 点击 "guangzhou" 链接
+        local_city_link.click()
 
+        # 等待遮罩层消失（这里使用遮罩层元素的消失作为判断条件）
+        # 创建显示等待对象，等待城市选择元素出现并可点击（等待时间为最多 10 秒）
+        WebDriverWait(driver, 10).until(ec.invisibility_of_element_located((By.ID, "browser-city")))
+        switch_city_page(_driver=driver)
+        pass
     # 找到搜索框并输入关键词
     search_input = driver.find_element(By.ID, "J-search-input")
     search_input.send_keys("所在地")
@@ -234,10 +254,10 @@ try:
             if "disabled" in next_page.get_attribute("class"):
                 break
         except Exception as e:
-            logger.error("未找到下一页链接", e)
+            logger.error("未找到下一页链接\n%s", str(e))
             break
 
-        if len(shop_info_list) > 5:
+        if len(shop_info_list) > max_page_count:
             break
         # 点击下一页链接
         next_page.click()
@@ -248,7 +268,7 @@ try:
         )
 except Exception as e:
     # 用户未登录或超时
-    logger.error("用户未登录或超时", e)
+    logger.error("用户未登录或超时\n%s", str(e.args[0]))
 finally:
     # 打开文件以保存店铺信息
     with open(shop_info_file_path, "w", encoding="utf-8") as file:
