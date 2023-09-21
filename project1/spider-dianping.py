@@ -22,7 +22,11 @@ shop_info_file_path = os.path.join(current_directory, "shop_info.txt")
 random_shop_name_file_path = os.path.join(current_directory, "random_shop_name.txt")
 # 店铺信息列表，包括店铺名称、推荐菜、地点和团购信息
 shop_info_list = []
-max_page_count = 5
+max_page_index = 5
+# 设置缩放比例
+zoom = 1.5
+# 设置搜索的地址名称
+address_name = "所在地"
 
 
 def switch_city_page(_driver):
@@ -58,7 +62,7 @@ def init_logger():
 def init_driver():
     # 创建 Chrome 选项对象
     chrome_options = webdriver.ChromeOptions()
-    # chrome_options.add_argument("--headless")  # 无界面模式
+    chrome_options.add_argument("--headless")  # 无界面模式
     # 禁止输出 INFO 级别的日志
     chrome_options.add_argument('--log-level=3')
     # 设置用户代理字符串
@@ -72,9 +76,6 @@ def init_driver():
     _driver.implicitly_wait(10)
     return _driver
 
-
-# 设置缩放比例
-zoom = 1.5
 
 logger = init_logger()
 logger.info("开始运行爬虫程序")
@@ -174,7 +175,7 @@ try:
         pass
     # 找到搜索框并输入关键词
     search_input = driver.find_element(By.ID, "J-search-input")
-    search_input.send_keys("所在地")
+    search_input.send_keys(address_name)
 
     # 执行搜索操作
     search_button = driver.find_element(By.ID, "J-all-btn")
@@ -194,6 +195,7 @@ try:
     # 切换到新打开的标签页
     driver.switch_to.window(driver.window_handles[-1])
 
+    page_index = 1
     while True:
         # 找到商品列表的父元素
         shop_list = driver.find_element(By.ID, "shop-all-list")
@@ -267,7 +269,7 @@ try:
             logger.error("未找到下一页链接\n%s", str(e))
             break
 
-        if len(shop_info_list) > max_page_count:
+        if page_index > max_page_index:
             break
         # 点击下一页链接
         next_page.click()
