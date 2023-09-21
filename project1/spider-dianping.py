@@ -55,26 +55,31 @@ def init_logger():
 
 
 # 初始化日志记录器
-logger = init_logger()
+def init_driver():
+    # 创建 Chrome 选项对象
+    chrome_options = webdriver.ChromeOptions()
+    # chrome_options.add_argument("--headless")  # 无界面模式
+    # 禁止输出 INFO 级别的日志
+    chrome_options.add_argument('--log-level=3')
+    # 设置用户代理字符串
+    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+    chrome_options.add_argument(f"user-agent={user_agent}")
+    # 启动 Chrome WebDriver 并传入选项
+    _driver = webdriver.Chrome(options=chrome_options)
+    # 启动内置的 Chrome 浏览器并最大化窗口
+    _driver.maximize_window()
+    # 设置隐式等待时间
+    _driver.implicitly_wait(10)
+    return _driver
 
-logger.info("开始运行爬虫程序")
+
 # 设置缩放比例
 zoom = 1.5
-# 创建 Chrome 选项对象
-chrome_options = webdriver.ChromeOptions()
-# chrome_options.add_argument("--headless")  # 无界面模式
-# 禁止输出 INFO 级别的日志
-chrome_options.add_argument('--log-level=3')
-# 设置用户代理字符串
-user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 
-chrome_options.add_argument(f"user-agent={user_agent}")
-# 启动 Chrome WebDriver 并传入选项
-driver = webdriver.Chrome(options=chrome_options)
-# 启动内置的 Chrome 浏览器并最大化窗口
-driver.maximize_window()
-# 设置隐式等待时间
-driver.implicitly_wait(10)
+logger = init_logger()
+logger.info("开始运行爬虫程序")
+
+driver = init_driver()
 # 打开大众点评网站
 driver.get("https://www.dianping.com")
 # 检查是否存在保存的 Cookie 信息
