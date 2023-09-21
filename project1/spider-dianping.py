@@ -82,9 +82,8 @@ logger.info("开始运行爬虫程序")
 driver = init_driver()
 # 打开大众点评网站
 driver.get("https://www.dianping.com")
+
 # 检查是否存在保存的 Cookie 信息
-
-
 try:
     with open(cookie_file_path, "rb") as cookie_file:
         cookies = json.load(cookie_file)
@@ -93,6 +92,7 @@ try:
         driver.add_cookie(cookie)
     # 刷新页面以应用 Cookie
     driver.refresh()
+    # 等待用户登录完成，超时表明cookie已经失效
     user_element = WebDriverWait(driver, 15).until(
         ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
     )
@@ -100,8 +100,11 @@ try:
 except Exception as e:
     if isinstance(e, FileNotFoundError):
         logger.info("未找到保存的 Cookie 信息文件")
+    elif isinstance(e, TimeoutError):
+        logger.info("Cookie 信息已过期")
+        # driver.delete_all_cookies()
     else:
-        logger.error("读取 Cookie 信息文件失败", exc_info=True)
+        logger.error("读取 Cookie 信息文件失败 \n %s", str(e))
     # 如果找不到 Cookie 信息文件，使用二维码登录的代码部分可以放在这里
 
     # 定位并点击登录按钮
@@ -114,7 +117,7 @@ except Exception as e:
             ec.visibility_of_element_located((By.CLASS_NAME, "qrcode-tab")))
         qrcode_login_button.click()
     except Exception as e:
-        logger.info("切换到二维码登录方式失败\n%s", str(e.args[0]))
+        logger.info("切换到二维码登录方式失败\n %s", str(e))
         pass
     # 获取二维码图片
     qrcode_element = driver.find_element(By.CLASS_NAME, "qrcode-img")
@@ -137,7 +140,9 @@ except Exception as e:
     qr_code_image.show()
 
     # 此处添加登录的逻辑，等待用户登录完成
-
+    # 等待用户登录完成，超时表明cookie已经失效
+    user_element = WebDriverWait(driver, 15).until(
+        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']")))
     # 登录成功后，获取并保存 Cookie 信息到文件
     cookies = driver.get_cookies()
     with open(cookie_file_path, "w") as cookie_file:
@@ -155,7 +160,7 @@ try:
     try:
         switch_city_page(_driver=driver)
     except Exception as e:
-        logger.info("有遮罩层 \n%s", str(e.args[0]))
+        logger.info("有遮罩层 \n%s", str(e))
         # 使用部分匹配的 CSS 选择器来选择包含 "guangzhou" ,也就是当前定位城市的链接
         local_city_link = driver.find_element(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
 
@@ -273,7 +278,7 @@ try:
         )
 except Exception as e:
     # 用户未登录或超时
-    logger.error("用户未登录或超时\n%s", str(e.args[0]))
+    logger.error("用户未登录或超时\n%s", str(e))
 finally:
     # 打开文件以保存店铺信息
     with open(shop_info_file_path, "w", encoding="utf-8") as file:
@@ -285,6 +290,7 @@ finally:
             file.write("团购信息:\n")
             file.write(f"{shop_info['团购信息']}\n")
             file.write("\n")  # 添加空行分隔不同店铺信息
+        file.write(f"店铺总数: {len(shop_info_list)}\n")
 
 # 设置随机数生成器的种子，可以使用任何整数作为种子
 random.seed()  # 使用系统时间作为种子，以获得更随机的结果
