@@ -3,7 +3,6 @@ import logging
 import os
 import random
 from io import BytesIO
-
 from PIL import Image
 from selenium import webdriver
 from selenium.common import NoSuchElementException
@@ -11,6 +10,15 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
+
+# 设置获取的页数
+max_page_index = 5
+# 设置缩放比例
+zoom = 1.5
+# 设置所在城市
+target_city_name = "wuhan"
+# 设置搜索的地址名称
+target_address_name = "所在地"
 
 # 获取当前文件所在的目录
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -22,11 +30,6 @@ shop_info_file_path = os.path.join(current_directory, "shop_info.txt")
 random_shop_name_file_path = os.path.join(current_directory, "random_shop_name.txt")
 # 店铺信息列表，包括店铺名称、推荐菜、地点和团购信息
 shop_info_list = []
-max_page_index = 5
-# 设置缩放比例
-zoom = 1.5
-# 设置搜索的地址名称
-address_name = "所在地"
 
 
 def switch_city_page(_driver):
@@ -36,8 +39,8 @@ def switch_city_page(_driver):
     action = ActionChains(_driver)
     action.move_to_element(city_select).perform()
     # 找到武汉地区的链接并点击
-    wuhan_link = _driver.find_element(By.XPATH, "//a[@href='//www.dianping.com/wuhan']")
-    wuhan_link.click()
+    target_city_link = _driver.find_element(By.XPATH, "//a[@href='//www.dianping.com/%s']" % target_city_name)
+    target_city_link.click()
 
 
 def init_logger():
@@ -175,7 +178,7 @@ try:
         pass
     # 找到搜索框并输入关键词
     search_input = driver.find_element(By.ID, "J-search-input")
-    search_input.send_keys(address_name)
+    search_input.send_keys(target_address_name)
 
     # 执行搜索操作
     search_button = driver.find_element(By.ID, "J-all-btn")
@@ -269,6 +272,7 @@ try:
             logger.error("未找到下一页链接\n%s", str(e))
             break
 
+        page_index = page_index + 1
         if page_index > max_page_index:
             break
         # 点击下一页链接
