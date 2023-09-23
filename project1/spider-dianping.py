@@ -2,10 +2,11 @@ import json
 import logging
 import os
 import random
+import time
 from io import BytesIO
+
 from PIL import Image
 from selenium import webdriver
-from selenium.common import NoSuchElementException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
@@ -13,9 +14,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 # 设置获取的页数
 max_page_index = 5
-# 设置缩放比例
-zoom = 1.5
-# 设置所在城市
+# 设置缩放比例, 无头模式下默认为1，图形化模式下需要根据屏幕缩放比例设置
+zoom = 1
+# 设置所在城市 拼音或英文
 target_city_name = "wuhan"
 # 设置搜索的地址名称
 target_address_name = "所在地"
@@ -33,6 +34,14 @@ shop_info_list = []
 
 
 def switch_city_page(_driver):
+    local_city_links = _driver.find_elements(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
+    if len(local_city_links) > 0:
+        logger.info("有遮罩层，需要切换城市")
+        # 点击 "guangzhou" 链接
+        local_city_links[0].click()
+        # 等待遮罩层消失（这里使用遮罩层元素的消失作为判断条件）
+        # 创建显示等待对象，等待城市选择元素出现并可点击（等待时间为最多 10 秒）
+        WebDriverWait(_driver, 10).until(ec.invisibility_of_element_located((By.ID, "browser-city")))
     city_select = _driver.find_element(By.CLASS_NAME, "J-city")
     city_select.click()
     # 使用 ActionChains 将鼠标悬浮在城市选择元素上
@@ -61,11 +70,19 @@ def init_logger():
     return logger_
 
 
+def is_user_login(_driver):
+    _driver.implicitly_wait(15)
+    user_elements = _driver.find_elements(By.XPATH, "//span[@class='userinfo-container']")
+    _driver.implicitly_wait(10)
+    return len(user_elements) > 0
+
+
 # 初始化日志记录器
 def init_driver():
     # 创建 Chrome 选项对象
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument("--headless")  # 无界面模式
+    # 无界面模式
+    chrome_options.add_argument("--headless")
     # 禁止输出 INFO 级别的日志
     chrome_options.add_argument('--log-level=3')
     # 设置用户代理字符串
@@ -73,245 +90,199 @@ def init_driver():
     chrome_options.add_argument(f"user-agent={user_agent}")
     # 启动 Chrome WebDriver 并传入选项
     _driver = webdriver.Chrome(options=chrome_options)
-    # 启动内置的 Chrome 浏览器并最大化窗口
-    _driver.maximize_window()
+    # 启动内置的 Chrome 浏览器并最大化窗口,-headless模式下无法最大化窗口,需要设置窗口大小
+    _driver.set_window_size(1920, 1080)
     # 设置隐式等待时间
     _driver.implicitly_wait(10)
     return _driver
 
 
-logger = init_logger()
-logger.info("开始运行爬虫程序")
-
-driver = init_driver()
-# 打开大众点评网站
-driver.get("https://www.dianping.com")
-
-# 检查是否存在保存的 Cookie 信息
-try:
-    with open(cookie_file_path, "rb") as cookie_file:
-        cookies = json.load(cookie_file)
-    # 添加 Cookie 信息到 WebDriver
-    for cookie in cookies:
-        driver.add_cookie(cookie)
-    # 刷新页面以应用 Cookie
-    driver.refresh()
-    # 等待用户登录完成，超时表明cookie已经失效
-    user_element = WebDriverWait(driver, 15).until(
-        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
-    )
-
-except Exception as e:
-    if isinstance(e, FileNotFoundError):
-        logger.info("未找到保存的 Cookie 信息文件")
-    elif isinstance(e, TimeoutError):
-        logger.info("Cookie 信息已过期")
-        # driver.delete_all_cookies()
-    else:
-        logger.error("读取 Cookie 信息文件失败 \n %s", str(e))
-    # 如果找不到 Cookie 信息文件，使用二维码登录的代码部分可以放在这里
-
+def qr_code_login(_driver):
     # 定位并点击登录按钮
-    login_button = driver.find_element(By.LINK_TEXT, "你好，请登录/注册")
+    login_button = _driver.find_element(By.LINK_TEXT, "你好，请登录/注册")
     login_button.click()
-
     # 尝试切换到二维码登录方式，如果找不到对应元素，则不切换
-    try:
-        qrcode_login_button = WebDriverWait(driver, 5).until(
-            ec.visibility_of_element_located((By.CLASS_NAME, "qrcode-tab")))
-        qrcode_login_button.click()
-    except Exception as e:
-        logger.info("切换到二维码登录方式失败\n %s", str(e))
-        pass
+    _driver.implicitly_wait(5)
+    qrcode_login_buttons = _driver.find_elements(By.CLASS_NAME, "qrcode-tab")
+    _driver.implicitly_wait(10)
+    if len(qrcode_login_buttons) > 0:
+        logger.info("找到二维码登录按钮，切换到二维码登录方式")
+        qrcode_login_buttons[0].click()
     # 获取二维码图片
-    qrcode_element = driver.find_element(By.CLASS_NAME, "qrcode-img")
-    qrcode_url = qrcode_element.get_attribute("src")
-
+    qrcode_element = _driver.find_element(By.CLASS_NAME, "qrcode-img")
     # 获取二维码图片位置
     location = qrcode_element.location
     size = qrcode_element.size
-
     # 计算二维码区域的坐标
     left = location['x'] * zoom
     top = location['y'] * zoom
     right = left + size['width'] * zoom
     bottom = top + size['height'] * zoom
-
     # 下载并显示二维码图片
-    screenshot_binary = driver.get_screenshot_as_png()
+    screenshot_binary = _driver.get_screenshot_as_png()
     screenshot_image = Image.open(BytesIO(screenshot_binary))
     qr_code_image = screenshot_image.crop((left, top, right, bottom))
     qr_code_image.show()
-
     # 此处添加登录的逻辑，等待用户登录完成
     # 等待用户登录完成，超时表明cookie已经失效
-    user_element = WebDriverWait(driver, 15).until(
-        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']")))
-    # 登录成功后，获取并保存 Cookie 信息到文件
-    cookies = driver.get_cookies()
-    with open(cookie_file_path, "w") as cookie_file:
-        json.dump(cookies, cookie_file, indent=4)
+    if is_user_login(_driver):
+        logger.info("登录成功")
+        # 登录成功后，获取并保存 Cookie 信息到文件
+        _cookies = _driver.get_cookies()
+        with open(cookie_file_path, "w") as _cookie_file:
+            json.dump(_cookies, _cookie_file, indent=4)
+            logger.info("保存 Cookie 信息成功")
 
 
-# 用户登录后的操作，可以在这里添加
-# 登录状态检查
-try:
-    user_element = WebDriverWait(driver, 15).until(
-        ec.presence_of_element_located((By.XPATH, "//span[@class='userinfo-container']"))
-    )
-    # 用户已登录，可以继续获取商品信息
-    # 找到城市选择元素
-    try:
-        switch_city_page(_driver=driver)
-    except Exception as e:
-        logger.info("有遮罩层 \n%s", str(e))
-        # 使用部分匹配的 CSS 选择器来选择包含 "guangzhou" ,也就是当前定位城市的链接
-        local_city_link = driver.find_element(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
+def remove_mask_layer(_driver):
+    # 使用部分匹配的 CSS 选择器来选择包含 "guangzhou" ,也就是当前定位城市的链接
+    local_city_link = _driver.find_element(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
+    # 点击 "guangzhou" 链接
+    local_city_link.click()
+    # 等待遮罩层消失（这里使用遮罩层元素的消失作为判断条件）
+    # 创建显示等待对象，等待城市选择元素出现并可点击（等待时间为最多 10 秒）
+    WebDriverWait(_driver, 10).until(ec.invisibility_of_element_located((By.ID, "browser-city")))
 
-        # 点击 "guangzhou" 链接
-        local_city_link.click()
 
-        # 等待遮罩层消失（这里使用遮罩层元素的消失作为判断条件）
-        # 创建显示等待对象，等待城市选择元素出现并可点击（等待时间为最多 10 秒）
-        WebDriverWait(driver, 10).until(ec.invisibility_of_element_located((By.ID, "browser-city")))
-        switch_city_page(_driver=driver)
-        pass
+def go_to_shop_list_page(_driver):
     # 找到搜索框并输入关键词
-    search_input = driver.find_element(By.ID, "J-search-input")
+    search_input = _driver.find_element(By.ID, "J-search-input")
     search_input.send_keys(target_address_name)
-
     # 执行搜索操作
-    search_button = driver.find_element(By.ID, "J-all-btn")
+    search_button = _driver.find_element(By.ID, "J-all-btn")
     search_button.click()
     # 切换到新打开的标签页
-    driver.switch_to.window(driver.window_handles[-1])
-
+    _driver.switch_to.window(_driver.window_handles[-1])
     # 找到美食链接元素
-    food_link = driver.find_element(By.XPATH, "//a//span[contains(text(), '美食')]").find_element(By.XPATH, "..")
-
+    food_link = _driver.find_element(By.XPATH, "//a//span[contains(text(), '美食')]").find_element(By.XPATH, "..")
     # 获取美食链接的URL
     food_link_url = food_link.get_attribute("href")
-
     # 使用JavaScript打开链接在当前标签页中
-    driver.execute_script("window.location.href = arguments[0];", food_link_url)
-
+    _driver.execute_script("window.location.href = arguments[0];", food_link_url)
     # 切换到新打开的标签页
-    driver.switch_to.window(driver.window_handles[-1])
+    _driver.switch_to.window(_driver.window_handles[-1])
 
-    page_index = 1
-    while True:
-        # 找到商品列表的父元素
-        shop_list = driver.find_element(By.ID, "shop-all-list")
 
-        # 获取包含商品信息的所有<li>元素
-        items = shop_list.find_elements(By.XPATH, "//li[@class='']")
+def save_random_shop_info():
+    # 设置随机数生成器的种子，可以使用任何整数作为种子
+    random.seed()  # 使用系统时间作为种子，以获得更随机的结果
+    # 随机选取一条店铺信息
+    random_shop_info = random.choice(shop_info_list)
+    print("随机选取的店铺信息:")
+    print(random_shop_info)
+    # 提取随机选择的店铺名称并写入文件
+    with open(random_shop_name_file_path, "w", encoding="utf-8") as name_file:
+        name_file.write(f"店铺名称: {random_shop_info['shop_name']}\n")
+        name_file.write(f"推荐菜: {random_shop_info['recommend_dishes']}\n")
+        name_file.write(f"地点: {random_shop_info['location']}\n")
+        name_file.write("团购信息:\n")
+        name_file.write(f"{random_shop_info['group_deals']}\n")
 
-        # 遍历每个<li>元素，提取商品信息并打印
-        for item in items:
-            # 检查是否存在"暂停营业"的标签
-            driver.implicitly_wait(0)
-            try:
-                paused_label = item.find_element(By.XPATH, ".//span[contains(text(), '暂停营业')]")
 
-                # 如果元素找到了，可以在这里执行后续操作
-                print("找到了暂停营业标签:", paused_label.text)
-                continue
-            except NoSuchElementException:
-                # 在找不到元素时捕获TimeoutException异常，然后继续执行后续操作
-                print("未找到暂停营业标签，继续往下运行")
-            driver.implicitly_wait(10)
-
-            # 商铺未暂停营业，继续提取信息
-            # 获取商品名称
-            shop_name = item.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
-
-            # 获取团购信息的所有子元素
-            group_deals_elements = item.find_elements(By.XPATH,
-                                                      ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
-
-            # 使用列表推导式获取每个团购信息的文本
-            group_deals = [deal.get_attribute("textContent").strip() for deal in group_deals_elements]
-
-            # 使用换行符 '\n' 连接团购信息列表的文本
-            group_deals_text = '\n'.join(group_deals)
-
-            # 获取推荐菜信息
-            recommend_dishes_elements = item.find_elements(By.XPATH,
-                                                           ".//div[@class='recommend']//a[@class='recommend-click']")
-            recommend_dishes = [dish.text for dish in recommend_dishes_elements]
-            recommend_dishes_str = ", ".join(recommend_dishes)
-
-            # 获取地点信息
-            tag_elements = item.find_elements(By.XPATH, ".//div[@class='tag-addr']//span[@class='tag']")
-            locations = [tag.text for tag in tag_elements]
-            locations_str = ", ".join(locations)
-
-            # 打印店铺名称、推荐菜和地点信息
-            print("店铺名称:", shop_name)
-            print("推荐菜:", recommend_dishes_str)
-            print("地点:", locations_str)
-            # 打印商品名称和拼接的团购信息
-            print("团购信息:")
-            print(group_deals_text.strip())
-            print("\n")
-
-            # 将店铺信息添加到列表中
-            shop_info_list.append({
-                "店铺名称": shop_name,
-                "推荐菜": recommend_dishes_str,
-                "地点": locations_str,
-                "团购信息": group_deals_text.strip()
-            })
-
-        # 判断是否有下一页，如果没有则退出循环
-        try:
-            next_page = driver.find_element(By.CLASS_NAME, "next")
-            if "disabled" in next_page.get_attribute("class"):
-                break
-        except Exception as e:
-            logger.error("未找到下一页链接\n%s", str(e))
-            break
-
-        page_index = page_index + 1
-        if page_index > max_page_index:
-            break
-        # 点击下一页链接
-        next_page.click()
-
-        # 等待页面加载完成
-        WebDriverWait(driver, 10).until(
-            ec.presence_of_element_located((By.ID, "shop-all-list"))
-        )
-except Exception as e:
-    # 用户未登录或超时
-    logger.error("用户未登录或超时\n%s", str(e))
-finally:
-    # 打开文件以保存店铺信息
+def save_all_shops_info():
     with open(shop_info_file_path, "w", encoding="utf-8") as file:
         for shop_info in shop_info_list:
             # 写入店铺信息到文件中
-            file.write(f"店铺名称: {shop_info['店铺名称']}\n")
-            file.write(f"推荐菜: {shop_info['推荐菜']}\n")
-            file.write(f"地点: {shop_info['地点']}\n")
+            file.write(f"店铺名称: {shop_info['shop_name']}\n")
+            file.write(f"推荐菜: {shop_info['recommend_dishes']}\n")
+            file.write(f"地点: {shop_info['location']}\n")
             file.write("团购信息:\n")
-            file.write(f"{shop_info['团购信息']}\n")
+            file.write(f"{shop_info['group_deals']}\n")
             file.write("\n")  # 添加空行分隔不同店铺信息
         file.write(f"店铺总数: {len(shop_info_list)}\n")
 
-# 设置随机数生成器的种子，可以使用任何整数作为种子
-random.seed()  # 使用系统时间作为种子，以获得更随机的结果
-# 随机选取一条店铺信息
-random_shop_info = random.choice(shop_info_list)
-print("随机选取的店铺信息:")
-print(random_shop_info)
 
-# 提取随机选择的店铺名称并写入文件
-with open(random_shop_name_file_path, "w", encoding="utf-8") as name_file:
-    name_file.write(f"店铺名称: {random_shop_info['店铺名称']}\n")
-    name_file.write(f"推荐菜: {random_shop_info['推荐菜']}\n")
-    name_file.write(f"地点: {random_shop_info['地点']}\n")
-    name_file.write("团购信息:\n")
-    name_file.write(f"{random_shop_info['团购信息']}\n")
+def get_all_shops_info(_driver):
+    for i in range(1, max_page_index):
+        # 找到商品列表的父元素
+        shop_list_container = _driver.find_element(By.ID, "shop-all-list")
+        # 获取包含商品信息的所有<li>元素
+        shops = shop_list_container.find_elements(By.XPATH, "//li[@class='']")
+        # 遍历每个<li>元素，提取商品信息并打印
+        for shop in shops:
+            # 检查是否存在"暂停营业"的标签
+            driver.implicitly_wait(0)
+            paused_labels = shop.find_elements(By.XPATH, ".//span[contains(text(), '暂停营业')]")
+            if len(paused_labels) > 0:
+                logger.info(f"找到了暂停营业标签:{paused_labels[0].text}")
+                continue
+            # 商铺未暂停营业，继续提取信息
+            # 获取商品名称
+            shop_name = shop.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
 
-# 最后不要忘记关闭浏览器
-driver.quit()
+            # 获取团购信息的所有子元素
+            group_deals_text = get_element_info(shop, "\n", ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
+            # 获取推荐菜信息
+            recommend_dishes_str = get_element_info(shop, ", ", ".//div[@class='recommend']//a[@class='recommend-click']")
+            # 获取地点信息
+            locations_str = get_element_info(shop, ", ", ".//div[@class='tag-addr']//span[@class='addr']")
+
+            # 打印店铺名称、推荐菜和地点信息
+            print(f"店铺名称: {shop_name}\n 推荐菜: {recommend_dishes_str}\n 地点: {locations_str}\n 团购信息:\n {group_deals_text}\n")
+
+            # 将店铺信息添加到列表中
+            shop_info_list.append({
+                "shop_name": shop_name,
+                "recommend_dishes": recommend_dishes_str,
+                "location": locations_str,
+                "group_deals": group_deals_text
+            })
+
+        # 判断是否有下一页，如果没有则退出循环
+        next_pages = _driver.find_elements(By.CLASS_NAME, "next")
+        if len(next_pages) > 0:
+            logger.info("正在获取第 %d 页的数据", i + 1)
+            next_pages[0].click()
+        else:
+            logger.info("已经到达最后一页，退出循环")
+            break
+
+
+def get_element_info(shop, separator, element_condition):
+    # 获取每家店铺对应条件的元素
+    group_deals_elements = shop.find_elements(By.XPATH, element_condition)
+    # 使用列表推导式获取每个元素的文本
+    group_deals = [deal.get_attribute("textContent").strip() for deal in group_deals_elements]
+    # 使用换行符 separator 连接元素列表的文本
+    group_deals_text = separator.join(group_deals)
+    return group_deals_text
+
+
+if __name__ == '__main__':
+    logger = init_logger()
+    logger.info("开始运行爬虫程序")
+    driver = init_driver()
+    # 打开大众点评网站
+    driver.get("https://www.dianping.com")
+    # 检查是否存在保存的 Cookie 信息
+    if os.path.exists(cookie_file_path):
+        logger.info("存在保存的 Cookie 信息")
+        with open(cookie_file_path, "rb") as cookie_file:
+            cookies = json.load(cookie_file)
+        # 添加 Cookie 信息到 WebDriver
+        for cookie in cookies:
+            driver.add_cookie(cookie)
+        # 刷新页面以应用 Cookie
+        driver.refresh()
+        # 等待用户登录完成，超时表明cookie已经失效
+        if is_user_login(driver):
+            logger.info("Cookie 信息有效，无需登录")
+        else:
+            logger.error("Cookie 信息已失效，请重新登录")
+            # 重新登录
+            qr_code_login(driver)
+    else:
+        logger.info("不存在保存的 Cookie 信息")
+        qr_code_login(driver)
+
+    # 用户已登录，可以继续获取商品信息
+    # 切换到对应城市的页面
+    switch_city_page(_driver=driver)
+
+    # 跳转到搜索结果页面
+    go_to_shop_list_page(driver)
+    get_all_shops_info(driver)
+    save_all_shops_info()
+    save_random_shop_info()
+    driver.quit()
+    logger.info("爬虫程序运行结束")
