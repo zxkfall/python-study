@@ -18,7 +18,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 max_page_index = 5
 # 设置缩放比例, 无头模式下默认为1，图形化模式下需要根据屏幕缩放比例设置
 zoom = 1
-# 设置所在城市 拼音或英文
+# 设置所在城市 拼音(国内城市)或英文(国外城市)
 target_city_name = "wuhan"
 # 设置搜索的地址名称
 target_address_name = "所在地"
