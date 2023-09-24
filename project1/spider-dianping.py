@@ -65,9 +65,13 @@ def initialize_logger():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
     file_handler.setFormatter(formatter)
+    # 创建命令行处理器，将日志输出到命令行
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
     # 创建日志记录器并将处理器添加到记录器中
     logger_ = logging.getLogger(__name__)
     logger_.addHandler(file_handler)
+    logger_.addHandler(console_handler)
     logger_.setLevel(logging.INFO)
     return logger_
 
@@ -80,7 +84,6 @@ def is_user_logged_in(_driver, _logger):
     return len(user_elements) > 0
 
 
-# 初始化日志记录器
 def initialize_driver():
     # 创建 Chrome 选项对象
     chrome_options = webdriver.ChromeOptions()
@@ -147,7 +150,8 @@ def remove_mask_layer(_driver):
     WebDriverWait(_driver, 10).until(ec.invisibility_of_element_located((By.ID, "browser-city")))
 
 
-def go_to_shop_list_page(_driver):
+def go_to_shop_list_page(_driver, _logger):
+    _logger.info("正在打开搜索页面")
     # 找到搜索框并输入关键词
     search_input = _driver.find_element(By.ID, "J-search-input")
     search_input.send_keys(target_address_name)
@@ -156,23 +160,32 @@ def go_to_shop_list_page(_driver):
     search_button.click()
     # 切换到新打开的标签页
     _driver.switch_to.window(_driver.window_handles[-1])
-    # 找到美食链接元素
-    food_link = _driver.find_element(By.XPATH, "//a//span[contains(text(), '美食')]").find_element(By.XPATH, "..")
-    # 获取美食链接的URL
-    food_link_url = food_link.get_attribute("href")
-    # 使用JavaScript打开链接在当前标签页中
-    _driver.execute_script("window.location.href = arguments[0];", food_link_url)
-    # 切换到新打开的标签页
-    _driver.switch_to.window(_driver.window_handles[-1])
+    # 找到美食链接的span元素
+    food_link_children = _driver.find_elements(By.XPATH, "//a//span[contains(text(), '美食')]")
+    if len(food_link_children) > 0:
+        food_link = food_link_children[0].find_element(By.XPATH, "..")
+        _logger.info("找到美食链接")
+        # 获取美食链接的URL
+        food_link_url = food_link.get_attribute("href")
+        # 使用JavaScript打开链接在当前标签页中
+        _driver.execute_script("window.location.href = arguments[0];", food_link_url)
+        # 切换到新打开的标签页
+        _driver.switch_to.window(_driver.window_handles[-1])
+        return True
+    _logger.error("未找到美食链接")
+    not_found_tip = _driver.find_element(By.CLASS_NAME, "not-found-words")
+    not_found_tip_text = not_found_tip.get_attribute("textContent")
+    _logger.error(not_found_tip_text)
+    return False
 
 
-def save_random_shop_info():
+def save_random_shop_info(_logger):
     # 设置随机数生成器的种子，可以使用任何整数作为种子
     random.seed()  # 使用系统时间作为种子，以获得更随机的结果
     # 随机选取一条店铺信息
     random_shop_info = random.choice(shop_info_list)
-    print("随机选取的店铺信息:")
-    print(random_shop_info)
+    _logger.info("随机选取的店铺信息:")
+    _logger.info(str(random_shop_info))
     # 提取随机选择的店铺名称并写入文件
     with open(random_shop_name_file_path, "w", encoding="utf-8") as name_file:
         name_file.write(f"店铺名称: {random_shop_info['shop_name']}\n")
@@ -223,7 +236,7 @@ def get_and_save_shops_info(_driver, _logger):
             locations_str = get_element_info(shop, ", ", ".//div[@class='tag-addr']//span[@class='addr']")
 
             # 打印店铺名称、推荐菜和地点信息
-            print(
+            _logger.info(
                 f"店铺名称: {shop_name}\n 推荐菜: {recommend_dishes_str}\n 地点: {locations_str}\n 团购信息:\n {group_deals_text}\n")
 
             # 将店铺信息添加到列表中
@@ -287,8 +300,10 @@ def run_spider():
         qr_code_login(driver, logger)
 
     switch_to_city_page(driver, logger)
-    go_to_shop_list_page(driver)
+    if not go_to_shop_list_page(driver, logger):
+        return
     get_and_save_shops_info(driver, logger)
+    save_random_shop_info(logger)
 
     driver.quit()
     logger.info("爬虫程序运行结束")
