@@ -69,11 +69,11 @@ def initialize_logger():
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     # 创建日志记录器并将处理器添加到记录器中
-    logger_ = logging.getLogger(__name__)
-    logger_.addHandler(file_handler)
-    logger_.addHandler(console_handler)
-    logger_.setLevel(logging.INFO)
-    return logger_
+    _logger = logging.getLogger(__name__)
+    _logger.addHandler(file_handler)
+    _logger.addHandler(console_handler)
+    _logger.setLevel(logging.INFO)
+    return _logger
 
 
 def is_user_logged_in(_driver, _logger):
