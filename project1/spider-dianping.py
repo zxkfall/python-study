@@ -193,9 +193,10 @@ def save_random_shop_info(_logger):
         name_file.write(f"地点: {random_shop_info['location']}\n")
         name_file.write("团购信息:\n")
         name_file.write(f"{random_shop_info['group_deals']}\n")
+    _logger.info(f"随机选取的店铺名称已保存到文件中, 文件路径: {random_shop_name_file_path}")
 
 
-def save_all_shops_info():
+def save_shops_info(_logger):
     with open(shop_info_file_path, "w", encoding="utf-8") as file:
         for shop_info in shop_info_list:
             # 写入店铺信息到文件中
@@ -206,9 +207,10 @@ def save_all_shops_info():
             file.write(f"{shop_info['group_deals']}\n")
             file.write("\n")  # 添加空行分隔不同店铺信息
         file.write(f"店铺总数: {len(shop_info_list)}\n")
+        _logger.info(f"所有店铺信息已保存到文件中, 文件路径: {shop_info_file_path}, 店铺总数: {len(shop_info_list)}")
 
 
-def get_and_save_shops_info(_driver, _logger):
+def get_shops_info(_driver, _logger):
     for i in range(1, max_page_index):
         # 找到商品列表的父元素
         shop_list_container = _driver.find_element(By.ID, "shop-all-list")
@@ -237,7 +239,7 @@ def get_and_save_shops_info(_driver, _logger):
 
             # 打印店铺名称、推荐菜和地点信息
             _logger.info(
-                f"店铺名称: {shop_name}\n 推荐菜: {recommend_dishes_str}\n 地点: {locations_str}\n 团购信息:\n {group_deals_text}\n")
+                f"\n店铺名称: {shop_name}\n推荐菜: {recommend_dishes_str}\n地点: {locations_str}\n团购信息:\n{group_deals_text}\n")
 
             # 将店铺信息添加到列表中
             shop_info_list.append({
@@ -302,7 +304,8 @@ def run_spider():
     switch_to_city_page(driver, logger)
     if not go_to_shop_list_page(driver, logger):
         return
-    get_and_save_shops_info(driver, logger)
+    get_shops_info(driver, logger)
+    save_shops_info(logger)
     save_random_shop_info(logger)
 
     driver.quit()
