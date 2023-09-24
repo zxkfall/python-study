@@ -11,6 +11,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.ui import WebDriverWait
 
+# 全局替换所有commit历史记录里面当前分支的所有文件中的字符串
+# git filter-branch --tree-filter "find . -name '*.py' -exec sed -i -e 's/originalWord/currentWord/g' {} \;"
+
 # 设置获取的页数
 max_page_index = 5
 # 设置缩放比例, 无头模式下默认为1，图形化模式下需要根据屏幕缩放比例设置
