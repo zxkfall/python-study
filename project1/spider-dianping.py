@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import random
-import time
 from io import BytesIO
 
 from PIL import Image
@@ -33,10 +32,10 @@ random_shop_name_file_path = os.path.join(current_directory, "random_shop_name.t
 shop_info_list = []
 
 
-def switch_city_page(_driver):
+def switch_to_city_page(_driver, _logger):
     local_city_links = _driver.find_elements(By.CSS_SELECTOR, 'div#browser-city a[href^="//www.dianping.com/"]')
     if len(local_city_links) > 0:
-        logger.info("有遮罩层，需要切换城市")
+        _logger.info("有遮罩层，需要切换城市")
         # 点击 "guangzhou" 链接
         local_city_links[0].click()
         # 等待遮罩层消失（这里使用遮罩层元素的消失作为判断条件）
@@ -52,7 +51,7 @@ def switch_city_page(_driver):
     target_city_link.click()
 
 
-def init_logger():
+def initialize_logger():
     # 获取当前 Python 脚本的文件名（包括扩展名 .py）
     script_file = __file__
     # 获取文件名和扩展名的元组
@@ -70,7 +69,8 @@ def init_logger():
     return logger_
 
 
-def is_user_login(_driver):
+def is_user_logged_in(_driver, _logger):
+    _logger.info("正在检查用户是否已登录")
     _driver.implicitly_wait(15)
     user_elements = _driver.find_elements(By.XPATH, "//span[@class='userinfo-container']")
     _driver.implicitly_wait(10)
@@ -78,7 +78,7 @@ def is_user_login(_driver):
 
 
 # 初始化日志记录器
-def init_driver():
+def initialize_driver():
     # 创建 Chrome 选项对象
     chrome_options = webdriver.ChromeOptions()
     # 无界面模式
@@ -97,7 +97,7 @@ def init_driver():
     return _driver
 
 
-def qr_code_login(_driver):
+def qr_code_login(_driver, _logger):
     # 定位并点击登录按钮
     login_button = _driver.find_element(By.LINK_TEXT, "你好，请登录/注册")
     login_button.click()
@@ -106,7 +106,7 @@ def qr_code_login(_driver):
     qrcode_login_buttons = _driver.find_elements(By.CLASS_NAME, "qrcode-tab")
     _driver.implicitly_wait(10)
     if len(qrcode_login_buttons) > 0:
-        logger.info("找到二维码登录按钮，切换到二维码登录方式")
+        _logger.info("找到二维码登录按钮，切换到二维码登录方式")
         qrcode_login_buttons[0].click()
     # 获取二维码图片
     qrcode_element = _driver.find_element(By.CLASS_NAME, "qrcode-img")
@@ -125,13 +125,13 @@ def qr_code_login(_driver):
     qr_code_image.show()
     # 此处添加登录的逻辑，等待用户登录完成
     # 等待用户登录完成，超时表明cookie已经失效
-    if is_user_login(_driver):
-        logger.info("登录成功")
+    if is_user_logged_in(_driver, _logger):
+        _logger.info("登录成功")
         # 登录成功后，获取并保存 Cookie 信息到文件
         _cookies = _driver.get_cookies()
         with open(cookie_file_path, "w") as _cookie_file:
             json.dump(_cookies, _cookie_file, indent=4)
-            logger.info("保存 Cookie 信息成功")
+            _logger.info("保存 Cookie 信息成功")
 
 
 def remove_mask_layer(_driver):
@@ -192,7 +192,7 @@ def save_all_shops_info():
         file.write(f"店铺总数: {len(shop_info_list)}\n")
 
 
-def get_all_shops_info(_driver):
+def get_and_save_shops_info(_driver, _logger):
     for i in range(1, max_page_index):
         # 找到商品列表的父元素
         shop_list_container = _driver.find_element(By.ID, "shop-all-list")
@@ -201,24 +201,27 @@ def get_all_shops_info(_driver):
         # 遍历每个<li>元素，提取商品信息并打印
         for shop in shops:
             # 检查是否存在"暂停营业"的标签
-            driver.implicitly_wait(0)
+            _driver.implicitly_wait(0)
             paused_labels = shop.find_elements(By.XPATH, ".//span[contains(text(), '暂停营业')]")
             if len(paused_labels) > 0:
-                logger.info(f"找到了暂停营业标签:{paused_labels[0].text}")
+                _logger.info(f"找到了暂停营业标签:{paused_labels[0].text}")
                 continue
             # 商铺未暂停营业，继续提取信息
             # 获取商品名称
             shop_name = shop.find_element(By.XPATH, ".//a[@data-click-name='shop_title_click']").text
 
             # 获取团购信息的所有子元素
-            group_deals_text = get_element_info(shop, "\n", ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
+            group_deals_text = get_element_info(shop, "\n",
+                                                ".//div[@class='svr-info']//a[@data-click-name='shop_info_groupdeal_click']")
             # 获取推荐菜信息
-            recommend_dishes_str = get_element_info(shop, ", ", ".//div[@class='recommend']//a[@class='recommend-click']")
+            recommend_dishes_str = get_element_info(shop, ", ",
+                                                    ".//div[@class='recommend']//a[@class='recommend-click']")
             # 获取地点信息
             locations_str = get_element_info(shop, ", ", ".//div[@class='tag-addr']//span[@class='addr']")
 
             # 打印店铺名称、推荐菜和地点信息
-            print(f"店铺名称: {shop_name}\n 推荐菜: {recommend_dishes_str}\n 地点: {locations_str}\n 团购信息:\n {group_deals_text}\n")
+            print(
+                f"店铺名称: {shop_name}\n 推荐菜: {recommend_dishes_str}\n 地点: {locations_str}\n 团购信息:\n {group_deals_text}\n")
 
             # 将店铺信息添加到列表中
             shop_info_list.append({
@@ -231,10 +234,10 @@ def get_all_shops_info(_driver):
         # 判断是否有下一页，如果没有则退出循环
         next_pages = _driver.find_elements(By.CLASS_NAME, "next")
         if len(next_pages) > 0:
-            logger.info("正在获取第 %d 页的数据", i + 1)
+            _logger.info("正在获取第 %d 页的数据", i + 1)
             next_pages[0].click()
         else:
-            logger.info("已经到达最后一页，退出循环")
+            _logger.info("已经到达最后一页，退出循环")
             break
 
 
@@ -248,41 +251,45 @@ def get_element_info(shop, separator, element_condition):
     return group_deals_text
 
 
-if __name__ == '__main__':
-    logger = init_logger()
-    logger.info("开始运行爬虫程序")
-    driver = init_driver()
-    # 打开大众点评网站
-    driver.get("https://www.dianping.com")
-    # 检查是否存在保存的 Cookie 信息
+def load_cookies_and_refresh(_driver, _logger):
+    _logger.info("正在加载 Cookie 信息")
     if os.path.exists(cookie_file_path):
-        logger.info("存在保存的 Cookie 信息")
+        _logger.info("存在保存的 Cookie 信息")
         with open(cookie_file_path, "rb") as cookie_file:
             cookies = json.load(cookie_file)
         # 添加 Cookie 信息到 WebDriver
         for cookie in cookies:
-            driver.add_cookie(cookie)
+            _driver.add_cookie(cookie)
         # 刷新页面以应用 Cookie
-        driver.refresh()
-        # 等待用户登录完成，超时表明cookie已经失效
-        if is_user_login(driver):
-            logger.info("Cookie 信息有效，无需登录")
-        else:
-            logger.error("Cookie 信息已失效，请重新登录")
-            # 重新登录
-            qr_code_login(driver)
+        _driver.refresh()
+        return True
     else:
-        logger.info("不存在保存的 Cookie 信息")
-        qr_code_login(driver)
+        _logger.info("不存在保存的 Cookie 信息")
+        return False
 
-    # 用户已登录，可以继续获取商品信息
-    # 切换到对应城市的页面
-    switch_city_page(_driver=driver)
 
-    # 跳转到搜索结果页面
+def run_spider():
+    logger = initialize_logger()
+    logger.info("开始运行爬虫程序")
+
+    driver = initialize_driver()
+    url = "https://www.dianping.com/"
+    logger.info(f"正在打开网页 {url}")
+    driver.get(url)
+
+    if load_cookies_and_refresh(driver, logger) and is_user_logged_in(driver, logger):
+        logger.info("Cookie 信息有效，无需登录")
+    else:
+        logger.error("Cookie 信息已失效，请重新登录")
+        qr_code_login(driver, logger)
+
+    switch_to_city_page(driver, logger)
     go_to_shop_list_page(driver)
-    get_all_shops_info(driver)
-    save_all_shops_info()
-    save_random_shop_info()
+    get_and_save_shops_info(driver, logger)
+
     driver.quit()
     logger.info("爬虫程序运行结束")
+
+
+if __name__ == "__main__":
+    run_spider()
